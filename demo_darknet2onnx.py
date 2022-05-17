@@ -10,33 +10,38 @@ from tool.utils import *
 from tool.darknet2onnx import *
 
 
-def main(cfg_file, namesfile, weight_file, image_path, batch_size):
+def main(cfg_file, namesfile, weight_file, image_path, batch_size,channels=1):
 
     if batch_size <= 0:
-        onnx_path_demo = transform_to_onnx(cfg_file, weight_file, batch_size)
+        onnx_path_demo = transform_to_onnx(cfg_file, weight_file, batch_size,channels)
     else:
         # Transform to onnx as specified batch size
-        transform_to_onnx(cfg_file, weight_file, batch_size)
+        transform_to_onnx(cfg_file, weight_file, batch_size,channels)
         # Transform to onnx as demo
-        onnx_path_demo = transform_to_onnx(cfg_file, weight_file, 1)
+        onnx_path_demo = transform_to_onnx(cfg_file, weight_file, 1,channels)
 
     session = onnxruntime.InferenceSession(onnx_path_demo)
     # session = onnx.load(onnx_path)
     print("The model expects input shape: ", session.get_inputs()[0].shape)
+    if channels == 1:
+        image_src = cv2.imread(image_path,cv2.IMREAD_GRAYSCALE)
+    else:
+        image_src = cv2.imread(image_path)
+    detect(session, image_src, namesfile,channels)
 
-    image_src = cv2.imread(image_path)
-    detect(session, image_src, namesfile)
 
 
-
-def detect(session, image_src, namesfile):
+def detect(session, image_src, namesfile,channels):
     IN_IMAGE_H = session.get_inputs()[0].shape[2]
     IN_IMAGE_W = session.get_inputs()[0].shape[3]
 
     # Input
     resized = cv2.resize(image_src, (IN_IMAGE_W, IN_IMAGE_H), interpolation=cv2.INTER_LINEAR)
-    img_in = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-    img_in = np.transpose(img_in, (2, 0, 1)).astype(np.float32)
+    if channels == 1:
+        img_in = np.expand_dims(resized, axis=0).astype(np.float32)
+    else:
+        img_in = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        img_in = np.transpose(img_in, (2, 0, 1)).astype(np.float32)
     img_in = np.expand_dims(img_in, axis=0)
     img_in /= 255.0
     print("Shape of the network input: ", img_in.shape)
